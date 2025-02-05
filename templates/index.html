@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI TEXT Generator</title>
+    <script>
+        async function fetchGeneratedText() {
+            document.getElementById("response").innerText = "Generating...";
+            const response = await fetch("/generate");
+            const data = await response.json();
+            document.getElementById("response").innerText = data.text || "Error generating text.";
+        }
+    </script>
+</head>
+<body>
+    <h1>AI Text</h1>
+    <button onclick="fetchGeneratedText()">Generate AI Text</button>
+    <p id="response"></p>
+</body>
+</html>
