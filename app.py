@@ -12,56 +12,50 @@ app = Flask(__name__)
 
 load_dotenv()
 
-LD_CONFIG_KEY = "deepseek-chat"
-DEFAULT_CONFIG = {
-    "enabled": True,
-    "model": {"name": "deepseek-chat"},  
-    "messages": [],
-}
-
 # Initialize clients
-ldclient.set_config(Config(os.getenv("LAUNCHDARKLY_SDK_KEY")))  # Properly configure LaunchDarkly
-ld_ai_client = LDAIClient(ldclient.get())  # Get the initialized LD client
+ldclient.set_config(Config(os.getenv("LAUNCHDARKLY_SDK_KEY")))  
+ld_ai_client = LDAIClient(ldclient.get())  
 
-# ldclient = os.getenv("LAUNCHDARKLY_SDK_KEY")
 openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def generate(options=None):
-   """
-   Calls OpenAI's chat completion API to generate some text based on a prompt.
-   """
-   context = Context.builder('example-user-key').kind('user').name('Sandy').build()
+# need to used openrouter to run deepseek ai for free 
+client = openai.OpenAI(
+  base_url="https://openrouter.ai/api/v1",
+  api_key=os.getenv("OPENROUTER_API_KEY"),
+)
 
-   try:
-       ai_config_key = "deepseek-chat"
-       default_value = AIConfig(
-       enabled=True,
-       model=ModelConfig(name='deepseek-chat'),
-       messages=[],
+def generate(options=None):
+    context = Context.builder('example-user-key').kind('user').name('Sandy').build()
+
+    # name of ai configs projects name
+    ai_config_key = "quickdeepseek"
+    default_value = AIConfig(
+        enabled=True,
+        model=ModelConfig(name='deepseek-chat'),
+        messages=[],
     )
-       config_value, tracker = ldclient.config(
+    config_value, tracker = ld_ai_client.config(
         ai_config_key,
         context,
         default_value,
-    )
-       model_name = config_value.model.name
-    #    print("CONFIG VALUE: ", config_value)
-    #    print("MODEL NAME: ", model_name)
-       messages = [] if config_value.messages is None else config_value.messages
-       completion = tracker.track_openai_metrics(
-            lambda:
-                openai_client.chat.completions.create(
-                    model=model_name,
-                    messages=[message.to_dict() for message in messages],
-                )
+)
+    model_name = config_value.model.name
+    print("CONFIG VALUE: ", config_value)
+    print("MODEL NAME: ", model_name)
+    messages = [] if config_value.messages is None else config_value.messages
+    messages_dict=[message.to_dict() for message in messages]
+
+    completion = client.chat.completions.create(
+            # deepseek chat is not a valid model. have to change to deepseek/deepseek-r1:free from router
+            model="deepseek/deepseek-r1:free",
+            messages=messages_dict,
         )
-       response = completion.choices[0].message.content
-       print("Success.")
-       print("AI Response:", response)
-       return response
-   except Exception as error:
-        print("Error generating AI response:", error)
-        return None
+    track_success = tracker.track_success()
+    print(completion.choices[0].message.content) 
+
+    print("Successful AI Response:", completion)
+    return completion
+
 
 @app.route("/")
 def index():
@@ -70,7 +64,8 @@ def index():
 @app.route("/generate", methods=["GET"])
 def generate_text():
     response = generate()
-    return jsonify({"text": response})
+    # return jsonify({"text": response})
+    return response
 
 if __name__ == "__main__":
     if not ldclient:
@@ -84,9 +79,10 @@ if __name__ == "__main__":
         exit()
 
     print("*** SDK successfully initialized")
+
+    generate()
     
     try:
         app.run(debug=True)
-        Event().wait()
     except KeyboardInterrupt:
         pass
